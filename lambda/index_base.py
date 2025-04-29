@@ -3,11 +3,8 @@ import json
 import os
 import boto3
 import re  # 正規表現モジュールをインポート
-import requests
 from botocore.exceptions import ClientError
 
-
-FASTAPI_URL = os.environ.get("FASTAPI_URL", "https://puwaer.ngrok.io/generate")
 
 # Lambda コンテキストからリージョンを抽出する関数
 def extract_region_from_arn(arn):
@@ -23,12 +20,18 @@ bedrock_client = None
 # モデルID
 MODEL_ID = os.environ.get("MODEL_ID", "us.amazon.nova-lite-v1:0")
 
-
 def lambda_handler(event, context):
     try:
+        # コンテキストから実行リージョンを取得し、クライアントを初期化
+        global bedrock_client
+        if bedrock_client is None:
+            region = extract_region_from_arn(context.invoked_function_arn)
+            bedrock_client = boto3.client('bedrock-runtime', region_name=region)
+            print(f"Initialized Bedrock client in region: {region}")
+        
         print("Received event:", json.dumps(event))
         
-        # Cognito で認証されたユーザー情報を取得（typo 修正）
+        # Cognitoで認証されたユーザー情報を取得
         user_info = None
         if 'requestContext' in event and 'authorizer' in event['requestContext']:
             user_info = event['requestContext']['authorizer']['claims']
@@ -38,7 +41,10 @@ def lambda_handler(event, context):
         body = json.loads(event['body'])
         message = body['message']
         conversation_history = body.get('conversationHistory', [])
-                
+        
+        print("Processing message:", message)
+        print("Using model:", MODEL_ID)
+        
         # 会話履歴を使用
         messages = conversation_history.copy()
         
